@@ -889,7 +889,7 @@ class JinaFileApp(ctk.CTk):
             latest = data.get("tag_name", "").lstrip("v")
             if not latest:
                 return
-            if _parseVersion(latest) > _parseVersion(APP_VERSION):
+            if self._parseVersion(latest) > self._parseVersion(APP_VERSION):
                 self.after(0, lambda: self._promptUpdate(latest))
         except Exception:
             pass
@@ -901,10 +901,10 @@ class JinaFileApp(ctk.CTk):
                                "Open the download page?"):
             webbrowser.open(f"https://github.com/{GITHUB_REPO}/releases/latest")
 
-
-def _parseVersion(v: str) -> tuple[int, ...]:
-    parts = v.replace("-", ".").split(".")
-    return tuple(int(p) for p in parts if p.isdigit()) or (0,)
+    @staticmethod
+    def _parseVersion(v: str) -> tuple[int, ...]:
+        parts = v.replace("-", ".").split(".")
+        return tuple(int(p) for p in parts if p.isdigit()) or (0,)
 
     # ================================================================
     # Directory selection
