@@ -647,12 +647,13 @@ class JinaFileApp(ctk.CTk):
 
     def _buildUi(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(3, weight=1)
+        self.grid_rowconfigure(4, weight=1)
 
         self._buildTopFrame()      # row 0
         self._buildOptionsBar()    # row 1
-        self._buildTable()         # row 2 — regex row added/removed dynamically
-        self._buildBottomFrame()   # row 3
+        self._buildRegexFrame()    # row 2 — hidden by default
+        self._buildTable()         # row 3
+        self._buildBottomFrame()   # row 4
 
     # -- row 0: path + browse ------------------------------------------
 
@@ -733,7 +734,9 @@ class JinaFileApp(ctk.CTk):
                                            font=ctk.CTkFont(size=10))
         self._selCountLabel.grid(row=0, column=9, padx=(0, 10), pady=5, sticky="e")
 
-        # regex row (hidden)
+    # -- row 2: regex frame --------------------------------------------
+
+    def _buildRegexFrame(self) -> None:
         self._regexFrame = ctk.CTkFrame(self, corner_radius=8, height=28)
         self._regexFrame.grid(row=2, column=0, sticky="ew", padx=14, pady=(2, 0))
         self._regexFrame.grid_columnconfigure((1, 3), weight=1)
@@ -753,9 +756,6 @@ class JinaFileApp(ctk.CTk):
 
         self._regexFrame.grid_remove()
 
-    def _modeLabelText(self) -> str:
-        return f"{self._modeOpt.get()}  |  {self._style}"
-
     # -- row 3: preview table ------------------------------------------
 
     def _buildTable(self) -> None:
@@ -764,13 +764,12 @@ class JinaFileApp(ctk.CTk):
         container.grid_rowconfigure(1, weight=1)
         container.grid_columnconfigure(0, weight=1)
 
-        # header
         hdr = ctk.CTkFrame(container, corner_radius=0, fg_color="transparent")
         hdr.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 0))
         hdr.grid_columnconfigure((1, 2), weight=1)
 
         ctk.CTkLabel(hdr, text="Type", font=ctk.CTkFont(size=11, weight="bold"),
-                     cursor="hand2").grid(row=0, column=0, padx=4, pady=2)
+                     cursor="hand2").grid(row=0, column=0, padx=(4, 2), pady=2)
         hdrLabels = {
             "type": ctk.CTkLabel(hdr, text="Type", font=ctk.CTkFont(size=11, weight="bold"),
                                  cursor="hand2"),
@@ -786,12 +785,11 @@ class JinaFileApp(ctk.CTk):
         hdrLabels["proposed"].grid(row=0, column=2, padx=4, pady=2, sticky="w")
         hdrLabels["proposed"].bind("<Button-1>", lambda e: self._sortBy("proposed"))
 
-        # body
         self._tableBody = ctk.CTkScrollableFrame(container, corner_radius=4)
         self._tableBody.grid(row=1, column=0, sticky="nsew", padx=6, pady=(2, 6))
         self._tableBody.grid_columnconfigure((1, 2), weight=1)
 
-    # -- row 4: bottom bar -------------------------------------------
+    # -- row 3: bottom bar -------------------------------------------
 
     def _buildBottomFrame(self) -> None:
         f = ctk.CTkFrame(self, corner_radius=8, height=44)
@@ -829,14 +827,15 @@ class JinaFileApp(ctk.CTk):
     # Menu callbacks
     # ================================================================
 
-    @property
-    def _modeOpt(self) -> 'ctk.CTkOptionMenu':
-        """Return a fake option-menu-like label using the mode string."""
-        return type('obj', (object,), {'get': lambda: {
+    def _modeOptLabel(self) -> str:
+        return {
             "case": "Case Conversion",
             "clean": "Clean Suffixes",
             "regex": "Regex Rename",
-        }.get(self._mode, "Case Conversion")})()
+        }.get(self._mode, "Case Conversion")
+
+    def _modeLabelText(self) -> str:
+        return f"{self._modeOptLabel()}  |  {self._style}"
 
     def _onModeMenu(self) -> None:
         self._mode = self._modeVar.get()
@@ -845,7 +844,7 @@ class JinaFileApp(ctk.CTk):
         else:
             self._regexFrame.grid_remove()
         self._modeLabel.configure(text=self._modeLabelText())
-        self._actionBtn.configure(text=f"Execute ({self._modeOpt.get()})")
+        self._actionBtn.configure(text=f"Execute ({self._modeOptLabel()})")
         self._scan()
 
     def _onStyleMenu(self) -> None:
