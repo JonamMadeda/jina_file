@@ -588,12 +588,14 @@ class JinaFileApp(ctk.CTk):
     # ================================================================
 
     def _buildMenu(self) -> None:
-        menubar = tk.Menu(self, bg="#2b2b2b", fg="white", activebackground="#404060",
-                          activeforeground="white", relief="flat", bd=0)
+        menuKw = dict(bg="#2b2b2b", fg="white", activebackground="#404060",
+                      activeforeground="white", relief="flat", bd=0,
+                      font=("Segoe UI", 12))
+
+        menubar = tk.Menu(self, **menuKw)
 
         # --- File ---
-        fileM = tk.Menu(menubar, tearoff=0, bg="#2b2b2b", fg="white",
-                        activebackground="#404060", activeforeground="white")
+        fileM = tk.Menu(menubar, tearoff=0, **menuKw)
         fileM.add_command(label="Select Folder...", command=self._browseDir, accelerator="Ctrl+V")
         fileM.add_separator()
         fileM.add_command(label="Export CSV...", command=self._exportCsv)
@@ -602,14 +604,12 @@ class JinaFileApp(ctk.CTk):
         menubar.add_cascade(label="File", menu=fileM)
 
         # --- Mode ---
-        modeM = tk.Menu(menubar, tearoff=0, bg="#2b2b2b", fg="white",
-                        activebackground="#404060", activeforeground="white")
+        modeM = tk.Menu(menubar, tearoff=0, **menuKw)
         self._modeVar = tk.StringVar(value="case")
         modeM.add_radiobutton(label="Case Conversion", value="case",
                               variable=self._modeVar, command=self._onModeMenu)
 
-        styleM = tk.Menu(modeM, tearoff=0, bg="#2b2b2b", fg="white",
-                         activebackground="#404060", activeforeground="white")
+        styleM = tk.Menu(modeM, tearoff=0, **menuKw)
         self._styleVar = tk.StringVar(value="snake_case")
         for s in STYLES:
             styleM.add_radiobutton(label=s, value=s, variable=self._styleVar,
@@ -624,8 +624,7 @@ class JinaFileApp(ctk.CTk):
         menubar.add_cascade(label="Mode", menu=modeM)
 
         # --- Theme ---
-        themeM = tk.Menu(menubar, tearoff=0, bg="#2b2b2b", fg="white",
-                         activebackground="#404060", activeforeground="white")
+        themeM = tk.Menu(menubar, tearoff=0, **menuKw)
         self._themeVar = tk.StringVar(value="dark")
         themeM.add_radiobutton(label="Dark", value="dark",
                                variable=self._themeVar, command=self._onThemeMenu)
@@ -634,8 +633,7 @@ class JinaFileApp(ctk.CTk):
         menubar.add_cascade(label="Theme", menu=themeM)
 
         # --- Help ---
-        helpM = tk.Menu(menubar, tearoff=0, bg="#2b2b2b", fg="white",
-                        activebackground="#404060", activeforeground="white")
+        helpM = tk.Menu(menubar, tearoff=0, **menuKw)
         helpM.add_command(label="About jina_file", command=self._showAbout)
         menubar.add_cascade(label="Help", menu=helpM)
 
@@ -647,7 +645,7 @@ class JinaFileApp(ctk.CTk):
 
     def _buildUi(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(4, weight=1)
+        self.grid_rowconfigure(3, weight=1)
 
         self._buildTopFrame()      # row 0
         self._buildOptionsBar()    # row 1
