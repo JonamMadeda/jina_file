@@ -15,6 +15,7 @@ Batch rename files and folders in a directory — snake_case, kebab-case, camelC
 - **Pre-rename journal** — CSV export of the rename plan
 - **Collision & Error Warnings** — inline indicators for name collisions, invalid chars, path length
 - **Dark / Light theme** — toggle from the menu bar
+- **Auto-Update** — checks for new versions on startup or via Help menu; prompts to download
 - **Standalone .exe** — packaged with PyInstaller; no Python required
 
 ## Download

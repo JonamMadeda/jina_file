@@ -6,6 +6,8 @@ import shutil
 import threading
 import time
 import tkinter as tk
+import urllib.request
+import webbrowser
 from tkinter import filedialog, messagebox
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +21,8 @@ import customtkinter as ctk
 # Constants
 # ===================================================================
 
+APP_VERSION = "1.0.0"
+GITHUB_REPO = "JonamMadeda/jina_file"
 STYLES = ["snake_case", "kebab-case", "camelCase", "PascalCase"]
 INVALID_WIN_CHARS = set('\\/:*?"<>|')
 MAX_AFFECTED_WARN = 500
@@ -555,6 +559,7 @@ class JinaFileApp(ctk.CTk):
         self._buildUi()
         self._setAppIcon()
         self.bind("<Control-v>", lambda e: self._pasteDir())
+        Thread(target=self._checkForUpdates, daemon=True).start()
 
     # -- app icon --------------------------------------------------------
 
@@ -634,6 +639,8 @@ class JinaFileApp(ctk.CTk):
 
         # --- Help ---
         helpM = tk.Menu(menubar, tearoff=0, **menuKw)
+        helpM.add_command(label="Check for Updates", command=self._checkForUpdates)
+        helpM.add_separator()
         helpM.add_command(label="About jina_file", command=self._showAbout)
         menubar.add_cascade(label="Help", menu=helpM)
 
@@ -858,10 +865,39 @@ class JinaFileApp(ctk.CTk):
 
     def _showAbout(self) -> None:
         messagebox.showinfo("About jina_file",
-                            "jina_file v1.0.0\n\n"
+                            f"jina_file v{APP_VERSION}\n\n"
                             "Batch rename files and folders\n"
                             "to snake_case and other naming styles.\n\n"
                             "Built with Python, CustomTkinter, and PyInstaller.")
+
+    # -- update check --------------------------------------------------
+
+    def _checkForUpdates(self) -> None:
+        try:
+            req = urllib.request.Request(
+                f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+                headers={"User-Agent": "jina_file", "Accept": "application/vnd.github.v3+json"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            latest = data.get("tag_name", "").lstrip("v")
+            if not latest:
+                return
+            if _parseVersion(latest) > _parseVersion(APP_VERSION):
+                self.after(0, lambda: self._promptUpdate(latest))
+        except Exception:
+            pass
+
+    def _promptUpdate(self, latest: str) -> None:
+        if messagebox.askyesno("Update Available",
+                               f"jina_file v{latest} is available.\n"
+                               f"You are running v{APP_VERSION}.\n\n"
+                               "Open the download page?"):
+            webbrowser.open(f"https://github.com/{GITHUB_REPO}/releases/latest")
+
+
+def _parseVersion(v: str) -> tuple[int, ...]:
+    parts = v.replace("-", ".").split(".")
+    return tuple(int(p) for p in parts if p.isdigit()) or (0,)
 
     # ================================================================
     # Directory selection

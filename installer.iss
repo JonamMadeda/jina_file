@@ -1,6 +1,6 @@
 [Setup]
 AppName=jina_file
-AppVersion=1.0.0
+AppVersion=1.1.0
 AppPublisher=jina_file
 DefaultDirName={autopf}\jina_file
 DefaultGroupName=jina_file
