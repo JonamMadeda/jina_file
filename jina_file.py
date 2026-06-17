@@ -164,18 +164,10 @@ def shouldExclude(p: Path) -> bool:
 
 
 # ===================================================================
-# Collision dry-run — detect rename chains
+# Collision dry-run
 # ===================================================================
 
 def detectAndResolveChains(plan: list[dict]) -> list[dict]:
-    """Detect rename chains (A→name_of_B, B→name_of_C) and insert
-    a temporary-name hop to avoid intermediate collisions.
-
-    A chain happens when entry A's *final* name matches entry B's
-    *source* name — renaming A→B first would overwrite B before B
-    itself is renamed.  We break this by renaming A to a temp name
-    first, then doing the final hop after B has moved.
-    """
     srcNames: set[str] = set()
     for e in plan:
         if e["checked"]:
@@ -193,13 +185,10 @@ def detectAndResolveChains(plan: list[dict]) -> list[dict]:
             e["final"] = tmpName
             e["_tempHop"] = finalName
         fixed.append(e)
-
     return fixed
 
 
 def finalizeTempHops(plan: list[dict]) -> None:
-    """After all primary renames complete, rename temp→final for any
-    entries that have a _tempHop."""
     for e in plan:
         dst = e.get("_tempHop")
         if dst:
@@ -219,7 +208,7 @@ def filterItems(items: list[Path], excludeSystem: bool, excludeHidden: bool) -> 
             continue
         if excludeHidden:
             try:
-                if p.name.startswith(".") or (hasattr(p, 'is_hidden') and p.is_hidden()):
+                if p.name.startswith("."):
                     continue
             except Exception:
                 if p.name.startswith("."):
@@ -246,9 +235,7 @@ def buildPlan(paths: list[Path], *,
         if checked is not None and srcStr not in checked:
             plan.append({"src": p, "proposed": p.name, "final": p.name, "checked": False})
             continue
-
         prop = proposedName(p.name, mode, style, pattern, replacement, prefix, suffix)
-
         if prop not in used:
             used[prop] = 0
             final = prop
@@ -257,10 +244,8 @@ def buildPlan(paths: list[Path], *,
             stem = Path(prop).stem
             ext = Path(prop).suffix
             final = f"{stem}_{used[prop]}{ext}"
-
         plan.append({"src": p, "proposed": prop, "final": final, "checked": True})
 
-    # resolve remaining collisions among final names
     changed = True
     while changed:
         changed = False
@@ -282,7 +267,6 @@ def buildPlan(paths: list[Path], *,
 
     if enableChains:
         plan = detectAndResolveChains(plan)
-
     return plan
 
 
@@ -315,19 +299,10 @@ class RenameJournal:
                                 "type", "mode", "style"])
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 for e in entries:
-                    w.writerow([
-                        ts,
-                        e["src"].name,
-                        e["final"],
-                        "folder" if e["src"].is_dir() else "file",
-                        mode,
-                        style,
-                    ])
+                    w.writerow([ts, e["src"].name, e["final"],
+                                "folder" if e["src"].is_dir() else "file", mode, style])
         except Exception:
             pass
-
-    def getLogPath(self) -> Path:
-        return self._path
 
 
 # ===================================================================
@@ -344,13 +319,10 @@ def writeSnapshot(backupDir: Path, entries: list[dict]) -> None:
                 p = e["src"]
                 try:
                     stat = p.stat()
-                    w.writerow([
-                        str(p),
-                        str(p.relative_to(p.anchor)),
-                        "yes" if p.is_dir() else "no",
-                        stat.st_size,
-                        datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    ])
+                    w.writerow([str(p), str(p.relative_to(p.anchor)),
+                                "yes" if p.is_dir() else "no",
+                                stat.st_size,
+                                datetime.fromtimestamp(stat.st_mtime).isoformat()])
                 except Exception:
                     w.writerow([str(p), "", "unknown", 0, ""])
     except Exception:
@@ -367,7 +339,7 @@ class UndoStack:
         self._backupsDir = rootDir / BACKUPS_DIR_NAME
         self._indexPath = self._backupsDir / "_index.json"
         self._maxDepth = maxDepth
-        self._stack: list[dict] = []  # [{ts, count, mode, style}]
+        self._stack: list[dict] = []
         self._load()
 
     def _load(self) -> None:
@@ -383,10 +355,8 @@ class UndoStack:
         self._backupsDir.mkdir(parents=True, exist_ok=True)
         try:
             self._indexPath.write_text(
-                json.dumps({"max_depth": self._maxDepth, "stack": self._stack},
-                           indent=2),
-                encoding="utf-8",
-            )
+                json.dumps({"max_depth": self._maxDepth, "stack": self._stack}, indent=2),
+                encoding="utf-8")
         except Exception:
             pass
 
@@ -403,8 +373,6 @@ class UndoStack:
         backupDir = self._backupsDir / ts
         backupDir.mkdir(parents=True, exist_ok=True)
         _setHidden(self._backupsDir)
-
-        # copy files
         for e in entries:
             src = e["src"]
             try:
@@ -417,21 +385,12 @@ class UndoStack:
                 shutil.copytree(src, dst, dirs_exist_ok=True)
             else:
                 shutil.copy2(src, dst)
-
-        # write snapshot
         writeSnapshot(backupDir, entries)
-
-        self._stack.append({
-            "ts": ts,
-            "count": len(entries),
-            "mode": mode,
-            "style": style,
-        })
+        self._stack.append({"ts": ts, "count": len(entries), "mode": mode, "style": style})
         self._trim()
         self._save()
 
     def pop(self) -> Optional[dict]:
-        """Pop the most recent backup and return its info."""
         if not self._stack:
             return None
         top = self._stack.pop()
@@ -442,7 +401,6 @@ class UndoStack:
         return self._backupsDir / ts
 
     def restore(self, ts: str) -> int:
-        """Restore all files from a given backup.  Returns count restored."""
         backupDir = self.getBackupDir(ts)
         if not backupDir.is_dir():
             return 0
@@ -487,47 +445,32 @@ def _setHidden(p: Path) -> None:
 class ConfirmDialog(ctk.CTkToplevel):
     def __init__(self, parent, entries: list[dict], title: str = "Confirm Rename") -> None:
         super().__init__(parent)
-
         self._result = False
         self.title(title)
         self.geometry("700x500")
         self.minsize(500, 300)
         self.transient(parent)
         self.grab_set()
-
-        # layout
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         textBox = ctk.CTkTextbox(self, wrap="none", font=ctk.CTkFont(size=12, family="Consolas"))
         textBox.grid(row=0, column=0, sticky="nsew", padx=12, pady=(12, 4))
-
-        header = f"{'Type':<8} {'Original':<40} → {'Proposed'}\n"
-        header += "─" * 90 + "\n"
-        textBox.insert("end", header)
-
+        hdr = f"{'Type':<8} {'Original':<40} \u2192 {'Proposed'}\n"
+        hdr += "\u2500" * 90 + "\n"
+        textBox.insert("end", hdr)
         for e in entries:
             tp = "folder" if e["src"].is_dir() else "file"
-            line = f"{tp:<8} {e['src'].name:<40} → {e['final']}\n"
-            textBox.insert("end", line)
+            textBox.insert("end", f"{tp:<8} {e['src'].name:<40} \u2192 {e['final']}\n")
             if e.get("_tempHop"):
-                textBox.insert("end", f"{'':8} {'':40}   ↪ {e['_tempHop']} (temp hop)\n")
-
+                textBox.insert("end", f"{'':8} {'':40}   \u21aa {e['_tempHop']} (temp hop)\n")
         textBox.configure(state="disabled")
 
-        # buttons
         btnRow = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         btnRow.grid(row=1, column=0, pady=(4, 12))
         btnRow.grid_columnconfigure((0, 1), weight=1)
-
-        cancelBtn = ctk.CTkButton(btnRow, text="Cancel", width=100,
-                                  command=self._cancel)
-        cancelBtn.grid(row=0, column=0, padx=(0, 8))
-
-        confirmBtn = ctk.CTkButton(btnRow, text="Confirm", width=100,
-                                   command=self._confirm)
-        confirmBtn.grid(row=0, column=1, padx=(8, 0))
-
+        ctk.CTkButton(btnRow, text="Cancel", width=100, command=self._cancel).grid(row=0, column=0, padx=(0, 8))
+        ctk.CTkButton(btnRow, text="Confirm", width=100, command=self._confirm).grid(row=0, column=1, padx=(8, 0))
         self.protocol("WM_DELETE_WINDOW", self._cancel)
         self.wait_window()
 
@@ -544,7 +487,7 @@ class ConfirmDialog(ctk.CTkToplevel):
 
 
 # ===================================================================
-# File-type & extension helpers (no emojis)
+# Helpers
 # ===================================================================
 
 def indicatorText(p: Path) -> str:
@@ -566,13 +509,10 @@ ctk.set_default_color_theme("blue")
 
 
 class JinaFileApp(ctk.CTk):
-    """Main application window."""
 
     @staticmethod
     def _rowColors() -> tuple[str, str]:
-        if ctk.get_appearance_mode() == "Dark":
-            return "#2d2d44", "#24243a"
-        return "#ffffff", "#f0f0f0"
+        return ("#2d2d44", "#24243a") if ctk.get_appearance_mode() == "Dark" else ("#ffffff", "#f0f0f0")
 
     @staticmethod
     def _changedColor() -> str:
@@ -586,24 +526,18 @@ class JinaFileApp(ctk.CTk):
     def _extColor() -> str:
         return "#6f6f6f" if ctk.get_appearance_mode() == "Dark" else "#999999"
 
-    # -- lifecycle ----------------------------------------------------
-
     def __init__(self) -> None:
         super().__init__()
-
         self.title("jina_file")
         self.minsize(860, 640)
         self.after(50, lambda: self.state("zoomed"))
-        self._setAppIcon()
 
-        # state
         self._targetDir: Path | None = None
         self._plan: list[dict] = []
         self._running = False
         self._abortEvent = threading.Event()
         self._undoStack: UndoStack | None = None
 
-        # mode state
         self._mode: str = "case"
         self._style: str = "snake_case"
         self._pattern: str = ""
@@ -611,18 +545,15 @@ class JinaFileApp(ctk.CTk):
         self._prefix: str = ""
         self._suffix: str = ""
 
-        # sorting
         self._sortCol: str | None = None
         self._sortAsc: bool = True
-
-        # filter text
         self._filterText: str = ""
-
-        # checkbox state
         self._checked: set[str] = set()
         self._allChecked: bool = True
 
+        self._buildMenu()
         self._buildUi()
+        self._setAppIcon()
         self.bind("<Control-v>", lambda e: self._pasteDir())
 
     # -- app icon --------------------------------------------------------
@@ -634,26 +565,81 @@ class JinaFileApp(ctk.CTk):
             img = Image.new("RGBA", (size, size), (26, 26, 46, 255))
             draw = ImageDraw.Draw(img)
             font = None
-            for name in ["segoeuib.ttf", "segoeui.ttf", "arialbd.ttf", "arial.ttf", "calibrib.ttf"]:
+            for n in ["segoeuib.ttf", "segoeui.ttf", "arialbd.ttf", "arial.ttf", "calibrib.ttf"]:
                 try:
-                    font = ImageFont.truetype(name, 28)
+                    font = ImageFont.truetype(n, 28)
                     break
                 except Exception:
                     continue
             if font is None:
                 font = ImageFont.load_default()
-            text = "JF"
-            bbox = draw.textbbox((0, 0), text, font=font)
-            tw = bbox[2] - bbox[0]
-            th = bbox[3] - bbox[1]
-            x = (size - tw) // 2 - bbox[0]
-            y = (size - th) // 2 - bbox[1] - 1
-            draw.text((x, y), text, fill=(200, 200, 210, 255), font=font)
+            b = draw.textbbox((0, 0), "JF", font=font)
+            x = (size - (b[2] - b[0])) // 2 - b[0]
+            y = (size - (b[3] - b[1])) // 2 - b[1] - 1
+            draw.text((x, y), "JF", fill=(200, 200, 210, 255), font=font)
             icoPath = Path(os.environ.get("TEMP", ".")) / ".jina_file_icon.ico"
-            img.save(icoPath, format="ICO", sizes=[(size, size)])
+            img.save(icoPath, format="ICO", sizes=[(size, size), (32, 32), (16, 16)])
             self.iconbitmap(default=str(icoPath))
         except Exception:
             pass
+
+    # ================================================================
+    # Menu bar
+    # ================================================================
+
+    def _buildMenu(self) -> None:
+        menubar = tk.Menu(self, bg="#2b2b2b", fg="white", activebackground="#404060",
+                          activeforeground="white", relief="flat", bd=0)
+
+        # --- File ---
+        fileM = tk.Menu(menubar, tearoff=0, bg="#2b2b2b", fg="white",
+                        activebackground="#404060", activeforeground="white")
+        fileM.add_command(label="Select Folder...", command=self._browseDir, accelerator="Ctrl+V")
+        fileM.add_separator()
+        fileM.add_command(label="Export CSV...", command=self._exportCsv)
+        fileM.add_separator()
+        fileM.add_command(label="Exit", command=self.quit)
+        menubar.add_cascade(label="File", menu=fileM)
+
+        # --- Mode ---
+        modeM = tk.Menu(menubar, tearoff=0, bg="#2b2b2b", fg="white",
+                        activebackground="#404060", activeforeground="white")
+        self._modeVar = tk.StringVar(value="case")
+        modeM.add_radiobutton(label="Case Conversion", value="case",
+                              variable=self._modeVar, command=self._onModeMenu)
+
+        styleM = tk.Menu(modeM, tearoff=0, bg="#2b2b2b", fg="white",
+                         activebackground="#404060", activeforeground="white")
+        self._styleVar = tk.StringVar(value="snake_case")
+        for s in STYLES:
+            styleM.add_radiobutton(label=s, value=s, variable=self._styleVar,
+                                   command=self._onStyleMenu)
+        modeM.add_cascade(label="Style", menu=styleM)
+
+        modeM.add_separator()
+        modeM.add_radiobutton(label="Clean Suffixes", value="clean",
+                              variable=self._modeVar, command=self._onModeMenu)
+        modeM.add_radiobutton(label="Regex Rename", value="regex",
+                              variable=self._modeVar, command=self._onModeMenu)
+        menubar.add_cascade(label="Mode", menu=modeM)
+
+        # --- Theme ---
+        themeM = tk.Menu(menubar, tearoff=0, bg="#2b2b2b", fg="white",
+                         activebackground="#404060", activeforeground="white")
+        self._themeVar = tk.StringVar(value="dark")
+        themeM.add_radiobutton(label="Dark", value="dark",
+                               variable=self._themeVar, command=self._onThemeMenu)
+        themeM.add_radiobutton(label="Light", value="light",
+                               variable=self._themeVar, command=self._onThemeMenu)
+        menubar.add_cascade(label="Theme", menu=themeM)
+
+        # --- Help ---
+        helpM = tk.Menu(menubar, tearoff=0, bg="#2b2b2b", fg="white",
+                        activebackground="#404060", activeforeground="white")
+        helpM.add_command(label="About jina_file", command=self._showAbout)
+        menubar.add_cascade(label="Help", menu=helpM)
+
+        self.configure(menu=menubar)
 
     # ================================================================
     # UI construction
@@ -661,283 +647,224 @@ class JinaFileApp(ctk.CTk):
 
     def _buildUi(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(4, weight=1)
+        self.grid_rowconfigure(3, weight=1)
 
-        self._buildTopFrame()
-        self._buildToolbar()
-        self._buildOptionsFrame()
-        self._buildSearchFrame()
-        self._buildTable()
-        self._buildBottomFrame()
+        self._buildTopFrame()      # row 0
+        self._buildOptionsBar()    # row 1
+        self._buildTable()         # row 2 — regex row added/removed dynamically
+        self._buildBottomFrame()   # row 3
 
     # -- row 0: path + browse ------------------------------------------
 
     def _buildTopFrame(self) -> None:
-        f = ctk.CTkFrame(self, corner_radius=8)
+        f = ctk.CTkFrame(self, corner_radius=8, height=42)
         f.grid(row=0, column=0, sticky="ew", padx=14, pady=(14, 4))
         f.grid_columnconfigure(0, weight=1)
+        f.grid_propagate(False)
 
         self._pathVar = ctk.StringVar(value="")
         entry = ctk.CTkEntry(f, textvariable=self._pathVar,
-                             placeholder_text="Select a folder or paste path (Ctrl+V) ...")
-        entry.grid(row=0, column=0, sticky="ew", padx=(10, 6), pady=10)
+                             placeholder_text="Select a folder or paste path (Ctrl+V) ...",
+                             height=28)
+        entry.grid(row=0, column=0, sticky="ew", padx=(10, 6), pady=7)
 
-        browseBtn = ctk.CTkButton(f, text="Browse", width=100,
+        browseBtn = ctk.CTkButton(f, text="Browse", width=90, height=28,
                                   command=self._browseDir)
-        browseBtn.grid(row=0, column=1, padx=(6, 10), pady=10)
+        browseBtn.grid(row=0, column=1, padx=(6, 10), pady=7)
 
-    # -- row 1: toolbar ------------------------------------------------
+    # -- row 1: options bar --------------------------------------------
 
-    def _buildToolbar(self) -> None:
-        f = ctk.CTkFrame(self, corner_radius=8)
-        f.grid(row=1, column=0, sticky="ew", padx=14, pady=(4, 0))
-        f.grid_columnconfigure(3, weight=1)
+    def _buildOptionsBar(self) -> None:
+        bar = ctk.CTkFrame(self, corner_radius=8, height=30)
+        bar.grid(row=1, column=0, sticky="ew", padx=14, pady=(4, 0))
+        bar.grid_columnconfigure(4, weight=1)
+        bar.grid_propagate(False)
 
-        self._themeBtn = ctk.CTkButton(f, text="☀ Light", width=100,
-                                       command=self._toggleTheme)
-        self._themeBtn.grid(row=0, column=0, padx=(10, 4), pady=6)
+        # mode label
+        self._modeLabel = ctk.CTkLabel(bar, text=self._modeLabelText(),
+                                       font=ctk.CTkFont(size=11, weight="bold"))
+        self._modeLabel.grid(row=0, column=0, padx=(10, 10), pady=5, sticky="w")
 
-        exportBtn = ctk.CTkButton(f, text="Export CSV", width=100,
-                                  command=self._exportCsv)
-        exportBtn.grid(row=0, column=1, padx=(4, 4), pady=6)
+        # separator
+        ctk.CTkLabel(bar, text="|", font=ctk.CTkFont(size=11),
+                     text_color="#555").grid(row=0, column=1, padx=0, pady=5)
 
-        self._undoBtn = ctk.CTkButton(f, text="↩ Undo", width=100,
-                                      state="disabled",
-                                      command=self._undo)
-        self._undoBtn.grid(row=0, column=2, padx=(4, 4), pady=6, sticky="w")
+        # prefix / suffix
+        self._prefixEntry = ctk.CTkEntry(bar, width=70, height=22,
+                                         placeholder_text="pre_")
+        self._prefixEntry.grid(row=0, column=2, padx=(8, 2), pady=4, sticky="w")
 
-        undoDepthLabel = ctk.CTkLabel(f, text="",
-                                      font=ctk.CTkFont(size=10))
-        undoDepthLabel.grid(row=0, column=3, padx=(0, 4), pady=6, sticky="w")
-        self._undoDepthLabel = undoDepthLabel
+        self._suffixEntry = ctk.CTkEntry(bar, width=70, height=22,
+                                         placeholder_text="_suf")
+        self._suffixEntry.grid(row=0, column=3, padx=(2, 10), pady=4, sticky="w")
 
-        self._statusVar = ctk.StringVar(value="Ready")
-        statusLabel = ctk.CTkLabel(f, textvariable=self._statusVar,
-                                   anchor="e", font=ctk.CTkFont(size=11))
-        statusLabel.grid(row=0, column=4, padx=10, pady=6, sticky="e")
+        # recursive checkbox
+        self._recursiveVar = ctk.BooleanVar(value=False)
+        recCheck = ctk.CTkCheckBox(bar, text="Subfolders", height=22,
+                                   variable=self._recursiveVar,
+                                   font=ctk.CTkFont(size=10))
+        recCheck.grid(row=0, column=4, padx=(0, 10), pady=5, sticky="w")
 
-    # -- row 2: mode options -------------------------------------------
+        # filter
+        filterLabel = ctk.CTkLabel(bar, text="Filter:",
+                                   font=ctk.CTkFont(size=10, weight="bold"))
+        filterLabel.grid(row=0, column=5, padx=(0, 2), pady=5, sticky="w")
 
-    def _buildOptionsFrame(self) -> None:
-        self._optFrame = ctk.CTkFrame(self, corner_radius=8)
-        self._optFrame.grid(row=2, column=0, sticky="ew", padx=14, pady=(4, 0))
-        self._optFrame.grid_columnconfigure(2, weight=1)
+        self._filterEntry = ctk.CTkEntry(bar, width=120, height=22,
+                                         placeholder_text="type to filter")
+        self._filterEntry.grid(row=0, column=6, padx=(0, 4), pady=4, sticky="w")
+        self._filterEntry.bind("<KeyRelease>", lambda e: self._applyFilter())
 
-        # row 0: mode + style
-        modeLabel = ctk.CTkLabel(self._optFrame, text="Mode:",
-                                 font=ctk.CTkFont(size=12, weight="bold"))
-        modeLabel.grid(row=0, column=0, padx=(12, 4), pady=(8, 2), sticky="w")
+        # scan btn
+        scanBtn = ctk.CTkButton(bar, text="Scan", width=50, height=22,
+                                font=ctk.CTkFont(size=10),
+                                command=self._scan)
+        scanBtn.grid(row=0, column=7, padx=(4, 8), pady=4)
 
-        self._modeOpt = ctk.CTkOptionMenu(
-            self._optFrame,
-            values=["Case Conversion", "Clean Suffixes", "Regex Rename"],
-            command=self._onModeMenu,
-            width=150,
-        )
-        self._modeOpt.grid(row=0, column=1, padx=(0, 12), pady=(8, 2), sticky="w")
+        # select all
+        self._selectAllVar = ctk.BooleanVar(value=True)
+        self._selectAllCb = ctk.CTkCheckBox(bar, text="All", height=22,
+                                            variable=self._selectAllVar,
+                                            command=self._onSelectAll,
+                                            font=ctk.CTkFont(size=10))
+        self._selectAllCb.grid(row=0, column=8, padx=(0, 6), pady=5)
 
-        styleLabel = ctk.CTkLabel(self._optFrame, text="Style:",
-                                  font=ctk.CTkFont(size=12, weight="bold"))
-        styleLabel.grid(row=0, column=2, padx=(4, 4), pady=(8, 2), sticky="w")
+        self._selCountLabel = ctk.CTkLabel(bar, text="",
+                                           font=ctk.CTkFont(size=10))
+        self._selCountLabel.grid(row=0, column=9, padx=(0, 10), pady=5, sticky="e")
 
-        self._styleOpt = ctk.CTkOptionMenu(
-            self._optFrame,
-            values=STYLES,
-            command=self._onStyleMenu,
-            width=130,
-        )
-        self._styleOpt.grid(row=0, column=3, padx=(0, 12), pady=(8, 2), sticky="w")
-
-        # row 1: prefix / suffix
-        prefLabel = ctk.CTkLabel(self._optFrame, text="Prefix:",
-                                 font=ctk.CTkFont(size=11))
-        prefLabel.grid(row=1, column=0, padx=(12, 2), pady=(2, 2), sticky="w")
-
-        self._prefixEntry = ctk.CTkEntry(self._optFrame, width=110,
-                                         placeholder_text="prefix_")
-        self._prefixEntry.grid(row=1, column=1, padx=(0, 12), pady=(2, 2), sticky="w")
-
-        suffLabel = ctk.CTkLabel(self._optFrame, text="Suffix:",
-                                 font=ctk.CTkFont(size=11))
-        suffLabel.grid(row=1, column=2, padx=(4, 2), pady=(2, 2), sticky="w")
-
-        self._suffixEntry = ctk.CTkEntry(self._optFrame, width=110,
-                                         placeholder_text="_suffix")
-        self._suffixEntry.grid(row=1, column=3, padx=(0, 12), pady=(2, 2), sticky="w")
-
-        # row 2: regex (hidden by default)
-        self._regexFrame = ctk.CTkFrame(self._optFrame, corner_radius=0,
-                                        fg_color="transparent")
-        self._regexFrame.grid(row=2, column=0, columnspan=4, sticky="ew",
-                              padx=12, pady=(2, 2))
+        # regex row (hidden)
+        self._regexFrame = ctk.CTkFrame(self, corner_radius=8, height=28)
+        self._regexFrame.grid(row=2, column=0, sticky="ew", padx=14, pady=(2, 0))
         self._regexFrame.grid_columnconfigure((1, 3), weight=1)
+        self._regexFrame.grid_propagate(False)
 
-        findLabel = ctk.CTkLabel(self._regexFrame, text="Find:",
-                                 font=ctk.CTkFont(size=11))
-        findLabel.grid(row=0, column=0, padx=(0, 2), sticky="w")
-        self._findEntry = ctk.CTkEntry(self._regexFrame,
-                                       placeholder_text=r"e.g. (\d+)_old")
-        self._findEntry.grid(row=0, column=1, padx=(0, 12), sticky="ew")
+        ctk.CTkLabel(self._regexFrame, text="Find:",
+                     font=ctk.CTkFont(size=10)).grid(row=0, column=0, padx=(10, 2), pady=3, sticky="w")
+        self._findEntry = ctk.CTkEntry(self._regexFrame, height=20,
+                                       placeholder_text=r"(\d+)_old")
+        self._findEntry.grid(row=0, column=1, padx=(0, 10), pady=3, sticky="ew")
 
-        replLabel = ctk.CTkLabel(self._regexFrame, text="Replace:",
-                                 font=ctk.CTkFont(size=11))
-        replLabel.grid(row=0, column=2, padx=(4, 2), sticky="w")
-        self._replEntry = ctk.CTkEntry(self._regexFrame,
-                                       placeholder_text=r"e.g. new_\1")
-        self._replEntry.grid(row=0, column=3, padx=(0, 0), sticky="ew")
+        ctk.CTkLabel(self._regexFrame, text="Replace:",
+                     font=ctk.CTkFont(size=10)).grid(row=0, column=2, padx=(4, 2), pady=3, sticky="w")
+        self._replEntry = ctk.CTkEntry(self._regexFrame, height=20,
+                                       placeholder_text=r"new_\1")
+        self._replEntry.grid(row=0, column=3, padx=(0, 10), pady=3, sticky="ew")
 
         self._regexFrame.grid_remove()
 
-        # row 3: recursive + scan
-        safeRow = ctk.CTkFrame(self._optFrame, corner_radius=0, fg_color="transparent")
-        safeRow.grid(row=3, column=0, columnspan=4, sticky="ew",
-                     padx=12, pady=(2, 2))
-        safeRow.grid_columnconfigure(2, weight=1)
+    def _modeLabelText(self) -> str:
+        return f"{self._modeOpt.get()}  |  {self._style}"
 
-        self._recursiveVar = ctk.BooleanVar(value=False)
-        recCheck = ctk.CTkCheckBox(safeRow, text="Include Subfolders",
-                                   variable=self._recursiveVar)
-        recCheck.grid(row=0, column=0, padx=(0, 16), pady=2, sticky="w")
-
-        scanBtn = ctk.CTkButton(safeRow, text="Scan", width=80,
-                                command=self._scan)
-        scanBtn.grid(row=0, column=3, padx=(6, 0), pady=2, sticky="w")
-
-    # -- row 3: search / filter + select all ---------------------------
-
-    def _buildSearchFrame(self) -> None:
-        f = ctk.CTkFrame(self, corner_radius=8)
-        f.grid(row=3, column=0, sticky="ew", padx=14, pady=(4, 0))
-        f.grid_columnconfigure(1, weight=1)
-
-        filterLabel = ctk.CTkLabel(f, text="Filter:",
-                                   font=ctk.CTkFont(size=11, weight="bold"))
-        filterLabel.grid(row=0, column=0, padx=(12, 4), pady=6, sticky="w")
-
-        self._filterEntry = ctk.CTkEntry(f, placeholder_text="Type to filter ...")
-        self._filterEntry.grid(row=0, column=1, padx=(0, 8), pady=6, sticky="ew")
-        self._filterEntry.bind("<KeyRelease>", lambda e: self._applyFilter())
-
-        self._selectAllVar = ctk.BooleanVar(value=True)
-        self._selectAllCb = ctk.CTkCheckBox(f, text="Select All",
-                                            variable=self._selectAllVar,
-                                            command=self._onSelectAll)
-        self._selectAllCb.grid(row=0, column=2, padx=(4, 8), pady=6, sticky="w")
-
-        self._selCountLabel = ctk.CTkLabel(f, text="",
-                                           font=ctk.CTkFont(size=11))
-        self._selCountLabel.grid(row=0, column=3, padx=(4, 12), pady=6, sticky="e")
-
-    # -- row 4: preview table ------------------------------------------
+    # -- row 3: preview table ------------------------------------------
 
     def _buildTable(self) -> None:
         container = ctk.CTkFrame(self, corner_radius=8)
-        container.grid(row=4, column=0, sticky="nsew", padx=14, pady=(4, 4))
+        container.grid(row=3, column=0, sticky="nsew", padx=14, pady=(4, 4))
         container.grid_rowconfigure(1, weight=1)
         container.grid_columnconfigure(0, weight=1)
 
-        # header row
-        self._hdrFrame = ctk.CTkFrame(container, corner_radius=0, fg_color="transparent")
-        self._hdrFrame.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 0))
-        self._hdrFrame.grid_columnconfigure((2, 3), weight=1)
+        # header
+        hdr = ctk.CTkFrame(container, corner_radius=0, fg_color="transparent")
+        hdr.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 0))
+        hdr.grid_columnconfigure((1, 2), weight=1)
 
-        typeHdr = ctk.CTkLabel(self._hdrFrame, text="Type",
-                               font=ctk.CTkFont(size=11, weight="bold"),
-                               cursor="hand2")
-        typeHdr.grid(row=0, column=0, padx=(4, 2), pady=2)
-        typeHdr.bind("<Button-1>", lambda e: self._sortBy("type"))
+        ctk.CTkLabel(hdr, text="Type", font=ctk.CTkFont(size=11, weight="bold"),
+                     cursor="hand2").grid(row=0, column=0, padx=4, pady=2)
+        hdrLabels = {
+            "type": ctk.CTkLabel(hdr, text="Type", font=ctk.CTkFont(size=11, weight="bold"),
+                                 cursor="hand2"),
+            "original": ctk.CTkLabel(hdr, text="Original Name",
+                                     font=ctk.CTkFont(size=12, weight="bold"), cursor="hand2"),
+            "proposed": ctk.CTkLabel(hdr, text="Proposed Name",
+                                     font=ctk.CTkFont(size=12, weight="bold"), cursor="hand2"),
+        }
+        hdrLabels["type"].grid(row=0, column=0, padx=(4, 2), pady=2)
+        hdrLabels["type"].bind("<Button-1>", lambda e: self._sortBy("type"))
+        hdrLabels["original"].grid(row=0, column=1, padx=4, pady=2, sticky="w")
+        hdrLabels["original"].bind("<Button-1>", lambda e: self._sortBy("original"))
+        hdrLabels["proposed"].grid(row=0, column=2, padx=4, pady=2, sticky="w")
+        hdrLabels["proposed"].bind("<Button-1>", lambda e: self._sortBy("proposed"))
 
-        warnHdrSpace = ctk.CTkLabel(self._hdrFrame, text="",
-                                    font=ctk.CTkFont(size=11))
-        warnHdrSpace.grid(row=0, column=1, padx=2, pady=2)
-
-        origHdr = ctk.CTkLabel(self._hdrFrame, text="Original Name",
-                               font=ctk.CTkFont(size=13, weight="bold"),
-                               cursor="hand2")
-        origHdr.grid(row=0, column=2, padx=4, pady=2, sticky="w")
-        origHdr.bind("<Button-1>", lambda e: self._sortBy("original"))
-
-        propHdr = ctk.CTkLabel(self._hdrFrame, text="Proposed Name",
-                               font=ctk.CTkFont(size=13, weight="bold"),
-                               cursor="hand2")
-        propHdr.grid(row=0, column=3, padx=4, pady=2, sticky="w")
-        propHdr.bind("<Button-1>", lambda e: self._sortBy("proposed"))
-
-        # scrollable body
+        # body
         self._tableBody = ctk.CTkScrollableFrame(container, corner_radius=4)
         self._tableBody.grid(row=1, column=0, sticky="nsew", padx=6, pady=(2, 6))
-        self._tableBody.grid_columnconfigure((2, 3), weight=1)
+        self._tableBody.grid_columnconfigure((1, 2), weight=1)
 
-    # -- row 5: bottom bar --------------------------------------------
+    # -- row 4: bottom bar -------------------------------------------
 
     def _buildBottomFrame(self) -> None:
-        f = ctk.CTkFrame(self, corner_radius=8)
-        f.grid(row=5, column=0, sticky="ew", padx=14, pady=(4, 14))
+        f = ctk.CTkFrame(self, corner_radius=8, height=44)
+        f.grid(row=4, column=0, sticky="ew", padx=14, pady=(4, 14))
         f.grid_columnconfigure(0, weight=1)
+        f.grid_propagate(False)
 
-        self._progress = ctk.CTkProgressBar(f, mode="determinate")
+        self._progress = ctk.CTkProgressBar(f, mode="determinate", height=8)
         self._progress.set(0)
-        self._progress.grid(row=0, column=0, columnspan=3, sticky="ew",
-                            padx=12, pady=(10, 4))
+        self._progress.grid(row=0, column=0, columnspan=5, sticky="ew",
+                            padx=12, pady=(6, 2))
 
         row = ctk.CTkFrame(f, corner_radius=0, fg_color="transparent")
-        row.grid(row=1, column=0, columnspan=3, sticky="ew",
-                 padx=12, pady=(0, 10))
-        row.grid_columnconfigure(0, weight=1)
+        row.grid(row=1, column=0, columnspan=5, sticky="ew", padx=12, pady=(0, 6))
 
-        self._summaryVar = ctk.StringVar(value="")
-        summaryLabel = ctk.CTkLabel(row, textvariable=self._summaryVar,
-                                    anchor="w", font=ctk.CTkFont(size=11))
-        summaryLabel.grid(row=0, column=0, sticky="w")
+        self._statusVar = ctk.StringVar(value="Ready")
+        ctk.CTkLabel(row, textvariable=self._statusVar, anchor="w",
+                     font=ctk.CTkFont(size=11)).grid(row=0, column=0, sticky="w")
 
-        self._abortBtn = ctk.CTkButton(
-            row, text="Abort", width=80, fg_color="#993333",
-            hover_color="#cc4444", state="disabled",
-            command=self._abortOp,
-        )
-        self._abortBtn.grid(row=0, column=1, padx=(4, 4))
+        self._abortBtn = ctk.CTkButton(row, text="Abort", width=70, height=26,
+                                       fg_color="#993333", hover_color="#cc4444",
+                                       state="disabled", command=self._abortOp)
+        self._abortBtn.grid(row=0, column=1, padx=(8, 4))
 
-        self._actionBtn = ctk.CTkButton(
-            row, text="Execute", width=190, height=34,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            command=self._runAction,
-        )
-        self._actionBtn.grid(row=0, column=2, padx=(4, 0))
+        self._undoBtn = ctk.CTkButton(row, text="Undo", width=70, height=26,
+                                      state="disabled", command=self._undo)
+        self._undoBtn.grid(row=0, column=2, padx=(4, 4))
+
+        self._actionBtn = ctk.CTkButton(row, text="Execute", width=130, height=28,
+                                        font=ctk.CTkFont(size=12, weight="bold"),
+                                        command=self._runAction)
+        self._actionBtn.grid(row=0, column=3, padx=(4, 0))
 
     # ================================================================
-    # Mode / style callbacks
+    # Menu callbacks
     # ================================================================
 
-    def _onModeMenu(self, val: str) -> None:
-        if val == "Case Conversion":
-            self._mode = "case"
-            self._regexFrame.grid_remove()
-            self._styleOpt.configure(state="normal")
-        elif val == "Clean Suffixes":
-            self._mode = "clean"
-            self._regexFrame.grid_remove()
-            self._styleOpt.configure(state="disabled")
-        else:
-            self._mode = "regex"
+    @property
+    def _modeOpt(self) -> 'ctk.CTkOptionMenu':
+        """Return a fake option-menu-like label using the mode string."""
+        return type('obj', (object,), {'get': lambda: {
+            "case": "Case Conversion",
+            "clean": "Clean Suffixes",
+            "regex": "Regex Rename",
+        }.get(self._mode, "Case Conversion")})()
+
+    def _onModeMenu(self) -> None:
+        self._mode = self._modeVar.get()
+        if self._mode == "regex":
             self._regexFrame.grid()
-            self._styleOpt.configure(state="disabled")
+        else:
+            self._regexFrame.grid_remove()
+        self._modeLabel.configure(text=self._modeLabelText())
         self._actionBtn.configure(text=f"Execute ({self._modeOpt.get()})")
         self._scan()
 
-    def _onStyleMenu(self, val: str) -> None:
-        self._style = val
+    def _onStyleMenu(self) -> None:
+        self._style = self._styleVar.get()
+        self._modeLabel.configure(text=self._modeLabelText())
         self._scan()
 
-    # ================================================================
-    # Theme toggle
-    # ================================================================
-
-    def _toggleTheme(self) -> None:
-        current = ctk.get_appearance_mode()
-        newMode = "Light" if current == "Dark" else "Dark"
+    def _onThemeMenu(self) -> None:
+        val = self._themeVar.get()
+        newMode = "Light" if val == "light" else "Dark"
         ctk.set_appearance_mode(newMode)
-        self._themeBtn.configure(text="☀ Light" if newMode == "Dark" else "🌙 Dark")
         self._rebuildTable()
+
+    def _showAbout(self) -> None:
+        messagebox.showinfo("About jina_file",
+                            "jina_file v1.0.0\n\n"
+                            "Batch rename files and folders\n"
+                            "to snake_case and other naming styles.\n\n"
+                            "Built with Python, CustomTkinter, and PyInstaller.")
 
     # ================================================================
     # Directory selection
@@ -969,16 +896,13 @@ class JinaFileApp(ctk.CTk):
     # ================================================================
 
     def _readOptions(self) -> tuple:
-        pfx = self._prefixEntry.get().strip()
-        sfx = self._suffixEntry.get().strip()
-        pat = self._findEntry.get() if self._mode == "regex" else ""
-        repl = self._replEntry.get() if self._mode == "regex" else ""
-        return pfx, sfx, pat, repl
+        return (self._prefixEntry.get().strip(), self._suffixEntry.get().strip(),
+                self._findEntry.get() if self._mode == "regex" else "",
+                self._replEntry.get() if self._mode == "regex" else "")
 
     def _scan(self) -> None:
         if self._targetDir is None:
             return
-
         self._statusVar.set("Scanning ...")
         self._progress.set(0)
         self._plan = []
@@ -1008,20 +932,19 @@ class JinaFileApp(ctk.CTk):
             self._rebuildTable()
             return
 
-        plan = buildPlan(items,
-                         mode=self._mode, style=self._style,
+        plan = buildPlan(items, mode=self._mode, style=self._style,
                          pattern=pat, replacement=repl,
-                         prefix=pfx, suffix=sfx,
-                         enableChains=True)
+                         prefix=pfx, suffix=sfx, enableChains=True)
         self._plan = plan
         self._checked = {str(e["src"]) for e in plan if e["checked"]}
         self._allChecked = True
-
         affected = countAffected(plan)
-        self._summaryVar.set(f"{len(plan)} item(s), {affected} will change")
+        self._summaryVar = f"{len(plan)} item(s), {affected} will change"
         self._statusVar.set(f"Scanned {len(plan)} item(s)")
         self._sortCol = None
         self._applyFilter()
+
+    _summaryVar: str = ""
 
     # ================================================================
     # Filter / sort
@@ -1044,8 +967,7 @@ class JinaFileApp(ctk.CTk):
         if self._filterText:
             txt = self._filterText
             items = [e for e in items
-                     if txt in e["src"].name.lower()
-                     or txt in e["final"].lower()]
+                     if txt in e["src"].name.lower() or txt in e["final"].lower()]
         if self._sortCol == "original":
             items.sort(key=lambda e: e["src"].name.lower(), reverse=not self._sortAsc)
         elif self._sortCol == "proposed":
@@ -1073,13 +995,13 @@ class JinaFileApp(ctk.CTk):
 
         checkedCount = sum(1 for e in display if str(e["src"]) in self._checked)
         totalCount = len(display)
-        self._selCountLabel.configure(text=f"{checkedCount} / {totalCount} selected")
+        self._selCountLabel.configure(text=f"{checkedCount}/{totalCount}")
 
         for idx, entry in enumerate(display):
             bg = colors[idx % 2]
             row = ctk.CTkFrame(self._tableBody, corner_radius=0, fg_color=bg)
             row.pack(fill="x")
-            row.grid_columnconfigure((2, 3), weight=1)
+            row.grid_columnconfigure((1, 2), weight=1)
 
             srcPath: Path = entry["src"]
             srcKey = str(srcPath)
@@ -1089,69 +1011,59 @@ class JinaFileApp(ctk.CTk):
 
             # checkbox
             cbVar = ctk.BooleanVar(value=isChecked)
-            cb = ctk.CTkCheckBox(row, text="", width=24,
+            cb = ctk.CTkCheckBox(row, text="", width=22, height=18,
                                  variable=cbVar,
                                  command=lambda k=srcKey, v=cbVar: self._onCheck(k, v))
             cb.grid(row=0, column=0, padx=(4, 2), pady=2)
 
-            # type indicator
+            # type
             tpText = indicatorText(srcPath)
             tpColor = fCol if srcPath.is_dir() else "gray"
             ctk.CTkLabel(row, text=tpText, anchor="w",
                          font=ctk.CTkFont(size=10),
-                         text_color=tpColor).grid(
-                row=0, column=1, padx=(2, 4), pady=2, sticky="w")
+                         text_color=tpColor).grid(row=0, column=1, padx=(2, 4), pady=2, sticky="w")
 
-            # warning indicators
+            # warnings
             warnings = []
             if hasInvalidChars(finalName):
                 warnings.append("invalid chars")
             wl = pathLengthWarning(str(srcPath.with_name(finalName)))
             if wl:
                 warnings.append("path too long")
-            # collision with existing file outside the plan
             if isChecked and finalName != srcPath.name:
-                testPath = srcPath.with_name(finalName)
-                if testPath.exists():
+                if srcPath.with_name(finalName).exists():
                     warnings.append("collision")
 
             warnText = "; ".join(warnings)
+            origCol = 1
             if warnText:
-                ctk.CTkLabel(row, text="⚠", anchor="w",
-                             font=ctk.CTkFont(size=12),
-                             text_color=warnColor).grid(
-                    row=0, column=2, padx=(2, 0), pady=2, sticky="w")
+                ctk.CTkLabel(row, text="\u26a0", anchor="w",
+                             font=ctk.CTkFont(size=10),
+                             text_color=warnColor).grid(row=0, column=2, padx=(2, 0), pady=2, sticky="w")
                 ctk.CTkLabel(row, text=warnText, anchor="w",
-                             font=ctk.CTkFont(size=9),
-                             text_color=warnColor).grid(
-                    row=0, column=2, padx=(18, 4), pady=2, sticky="w")
+                             font=ctk.CTkFont(size=8),
+                             text_color=warnColor).grid(row=0, column=2, padx=(14, 4), pady=2, sticky="w")
+                origCol = 2
 
             # original name
             ctk.CTkLabel(row, text=srcPath.name, anchor="w",
                          font=ctk.CTkFont(size=12)).grid(
-                row=0, column=2 if not warnText else 3, padx=4, pady=2, sticky="w")
-            actualOrigCol = 2 if not warnText else 3
+                row=0, column=origCol, padx=4, pady=2, sticky="w")
+            propCol = origCol + 1
 
-            # proposed name — stem in change-color, extension in grey
-            propStem = Path(finalName).stem
-            propExt = Path(finalName).suffix
-            propFrame = ctk.CTkFrame(row, corner_radius=0, fg_color=bg)
-            stemCol = actualOrigCol + 1
-            propFrame.grid(row=0, column=stemCol, padx=4, pady=2, sticky="w")
-            propFrame.grid_columnconfigure((0, 1), weight=0)
+            # proposed name (stem + extension lock)
+            pStem = Path(finalName).stem
+            pExt = Path(finalName).suffix
+            pf = ctk.CTkFrame(row, corner_radius=0, fg_color=bg)
+            pf.grid(row=0, column=propCol, padx=4, pady=2, sticky="w")
 
-            stemColor = changedColor if changed else None
-            stemFont = ctk.CTkFont(size=12, weight="bold") if changed else ctk.CTkFont(size=12)
-            ctk.CTkLabel(propFrame, text=propStem, anchor="w",
-                         font=stemFont,
-                         text_color=stemColor).grid(
-                row=0, column=0, sticky="w")
-
-            padlockIcon = " 🔒" if propExt else ""
-            ctk.CTkLabel(propFrame, text=f"{propExt}{padlockIcon}", anchor="w",
+            sc = changedColor if changed else None
+            sf = ctk.CTkFont(size=12, weight="bold") if changed else ctk.CTkFont(size=12)
+            ctk.CTkLabel(pf, text=pStem, anchor="w", font=sf,
+                         text_color=sc).grid(row=0, column=0, sticky="w")
+            ctk.CTkLabel(pf, text=f"{pExt} \U0001f512", anchor="w",
                          font=ctk.CTkFont(size=12),
-                         text_color=greyExt).grid(
-                row=0, column=1, padx=(0, 4), sticky="w")
+                         text_color=greyExt).grid(row=0, column=1, padx=(0, 4), sticky="w")
 
     def _clearTable(self) -> None:
         for w in self._tableBody.winfo_children():
@@ -1182,25 +1094,17 @@ class JinaFileApp(ctk.CTk):
         if not self._plan:
             messagebox.showinfo("Export", "Nothing to export. Scan a folder first.")
             return
-
         path = filedialog.asksaveasfilename(
             defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv"), ("JSON files", "*.json")],
-        )
+            filetypes=[("CSV files", "*.csv"), ("JSON files", "*.json")])
         if not path:
             return
-
         display = self._getDisplayPlan()
 
         if path.lower().endswith(".json"):
-            data = []
-            for e in display:
-                data.append({
-                    "original": e["src"].name,
-                    "proposed": e["final"],
-                    "type": "folder" if e["src"].is_dir() else "file",
-                    "willChange": e["final"] != e["src"].name,
-                })
+            data = [{"original": e["src"].name, "proposed": e["final"],
+                     "type": "folder" if e["src"].is_dir() else "file",
+                     "willChange": e["final"] != e["src"].name} for e in display]
             try:
                 with open(path, "w", encoding="utf-8") as fh:
                     json.dump(data, fh, indent=2)
@@ -1213,16 +1117,12 @@ class JinaFileApp(ctk.CTk):
                 w = csv.writer(fh)
                 w.writerow(["Type", "Original Name", "Proposed Name", "Will Change"])
                 for e in display:
-                    w.writerow([
-                        "folder" if e["src"].is_dir() else "file",
-                        e["src"].name,
-                        e["final"],
-                        "yes" if e["final"] != e["src"].name else "no",
-                    ])
+                    w.writerow(["folder" if e["src"].is_dir() else "file",
+                                e["src"].name, e["final"],
+                                "yes" if e["final"] != e["src"].name else "no"])
         except Exception as e:
             messagebox.showerror("Export Error", str(e))
             return
-
         self._statusVar.set(f"Exported to {path.name}")
 
     # ================================================================
@@ -1232,50 +1132,38 @@ class JinaFileApp(ctk.CTk):
     def _syncUndo(self) -> None:
         if self._undoStack and self._undoStack.canUndo:
             self._undoBtn.configure(state="normal")
-            self._undoDepthLabel.configure(
-                text=f"({self._undoStack.depth} level{'s' if self._undoStack.depth != 1 else ''})"
-            )
         else:
             self._undoBtn.configure(state="disabled")
-            self._undoDepthLabel.configure(text="")
 
     def _undo(self) -> None:
         if self._undoStack is None or not self._undoStack.canUndo:
             return
-
         top = self._undoStack.pop()
         if top is None:
             return
-
         ts = top["ts"]
-        ok = messagebox.askyesno(
-            "Undo",
-            f"Restore backup from {ts} ({top['count']} items) ?"
-        )
+        ok = messagebox.askyesno("Undo",
+                                 f"Restore backup from {ts} ({top['count']} items)?")
         if not ok:
-            self._undoStack.push([], top["mode"], top["style"])  # re-push
+            self._undoStack.push([], top["mode"], top["style"])
             self._syncUndo()
             return
-
         self._statusVar.set("Restoring backup ...")
         self._progress.set(0)
         self._actionBtn.configure(state="disabled")
         self._undoBtn.configure(state="disabled")
-
         Thread(target=self._doUndo, args=(ts,), daemon=True).start()
 
     def _doUndo(self, ts: str) -> None:
         assert self._undoStack is not None
         restored = self._undoStack.restore(ts)
-        # remove backup dir
         bdir = self._undoStack.getBackupDir(ts)
         if bdir.is_dir():
             shutil.rmtree(bdir, ignore_errors=True)
-
         self._actionBtn.configure(state="normal")
         self._syncUndo()
         self._progress.set(1)
-        self._statusVar.set(f"Undone — {restored} item(s) restored")
+        self._statusVar.set(f"Undone \u2014 {restored} item(s) restored")
         self.after(0, self._scan)
         self.after(300, lambda: messagebox.showinfo("Undo", f"Restored {restored} item(s)."))
 
@@ -1286,38 +1174,29 @@ class JinaFileApp(ctk.CTk):
     def _runAction(self) -> None:
         if self._running:
             return
-
         toRename = getCheckedToRename(self._plan, self._checked)
         if not toRename:
             display = self._getDisplayPlan()
             checkedCount = sum(1 for e in display if str(e["src"]) in self._checked)
             if checkedCount == 0:
-                messagebox.showinfo("Nothing Selected",
-                                    "No items are selected.\nUse the checkboxes to choose items.")
+                messagebox.showinfo("Nothing Selected", "No items are selected.")
             else:
                 messagebox.showinfo("Nothing to Rename",
-                                    "The selected items already have the correct naming.")
+                                    "Selected items already have the correct naming.")
             return
 
-        # max-depth guard
         if len(toRename) > MAX_AFFECTED_WARN:
-            ok = messagebox.askyesno(
-                "Large Rename",
-                f"You are about to rename {len(toRename)} items.\n"
-                "This may take a while. Continue?"
-            )
-            if not ok:
+            if not messagebox.askyesno("Large Rename",
+                                       f"Rename {len(toRename)} items?\nThis may take a while."):
                 return
 
-        # Confirmation summary dialog
         dlg = ConfirmDialog(self, toRename)
         if not dlg.result:
             return
 
-        # file-in-use pre-check
         locked = [e for e in toRename if isFileLocked(e["src"])]
         if locked:
-            msg = f"{len(locked)} file(s) are in use and will be skipped:\n"
+            msg = f"{len(locked)} file(s) in use, will be skipped:\n"
             msg += "\n".join(f"  - {e['src'].name}" for e in locked[:10])
             if len(locked) > 10:
                 msg += f"\n  ... and {len(locked) - 10} more"
@@ -1329,14 +1208,10 @@ class JinaFileApp(ctk.CTk):
         self._abortBtn.configure(state="normal")
         self._progress.set(0)
         self._statusVar.set("Backing up ...")
-
         Thread(target=self._doRename, args=(toRename, locked), daemon=True).start()
 
     def _doRename(self, toRename: list[dict], locked: list[dict]) -> None:
-        assert self._targetDir is not None
-        assert self._undoStack is not None
-
-        # backup (only non-locked items)
+        assert self._targetDir is not None and self._undoStack is not None
         backupEntries = [e for e in toRename if e not in locked]
         if backupEntries:
             try:
@@ -1357,43 +1232,33 @@ class JinaFileApp(ctk.CTk):
             if self._abortEvent.is_set():
                 self._statusVar.set("Aborted by user")
                 break
-
-            src: Path = entry["src"]
-
+            src = entry["src"]
             if entry in locked:
                 skipped += 1
                 self._updateProgress((i + 1) / total)
                 continue
-
-            dstName: str = entry.get("_tempHop") or entry["final"]
+            dstName = entry.get("_tempHop") or entry["final"]
             dst = src.with_name(dstName)
-
-            # guard against stale collisions
             counter = 1
             while dst.exists() and dst != src:
                 stem = Path(dstName).stem
                 ext = Path(dstName).suffix
                 dst = src.with_name(f"{stem}_{counter}{ext}")
                 counter += 1
-
             try:
                 src.rename(dst)
             except Exception as e:
                 errors += 1
                 self._statusVar.set(f"Error: {e}")
-
             self._updateProgress((i + 1) / total)
 
-        # finalize temp hops
         if not self._abortEvent.is_set():
             finalizeTempHops(toRename)
 
-        # write journal
         done = [e for e in toRename if e not in locked and e["src"].name != e["final"]]
         if done:
             try:
-                journal = RenameJournal(self._targetDir)
-                journal.append(done, self._mode, self._style)
+                RenameJournal(self._targetDir).append(done, self._mode, self._style)
             except Exception:
                 pass
 
@@ -1403,12 +1268,11 @@ class JinaFileApp(ctk.CTk):
         self._syncUndo()
 
         if self._abortEvent.is_set():
-            msg = f"Aborted — renamed {total - errors - skipped} item(s)."
+            msg = f"Aborted \u2014 renamed {total - errors - skipped} item(s)."
         elif errors:
             msg = f"Renamed {total - errors - skipped} item(s) with {errors} error(s)."
         else:
             msg = f"All {total - skipped} item(s) renamed successfully!"
-
         self._progress.set(1)
         self._statusVar.set(msg)
         self.after(0, self._scan)
@@ -1417,7 +1281,7 @@ class JinaFileApp(ctk.CTk):
 
     def _abortOp(self) -> None:
         self._abortEvent.set()
-        self._statusVar.set("Aborting after current file ...")
+        self._statusVar.set("Aborting ...")
 
     def _updateProgress(self, value: float) -> None:
         self.after(0, lambda: self._progress.set(value))
