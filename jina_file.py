@@ -469,8 +469,8 @@ class ConfirmDialog(ctk.CTkToplevel):
         btnRow = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         btnRow.grid(row=1, column=0, pady=(4, 12))
         btnRow.grid_columnconfigure((0, 1), weight=1)
-        ctk.CTkButton(btnRow, text="Cancel", width=100, command=self._cancel).grid(row=0, column=0, padx=(0, 8))
-        ctk.CTkButton(btnRow, text="Confirm", width=100, command=self._confirm).grid(row=0, column=1, padx=(8, 0))
+        ctk.CTkButton(btnRow, text="Cancel", width=110, command=self._cancel).grid(row=0, column=0, padx=(0, 10))
+        ctk.CTkButton(btnRow, text="Confirm", width=110, command=self._confirm).grid(row=0, column=1, padx=(10, 0))
         self.protocol("WM_DELETE_WINDOW", self._cancel)
         self.wait_window()
 
@@ -665,16 +665,16 @@ class JinaFileApp(ctk.CTk):
         entry = ctk.CTkEntry(f, textvariable=self._pathVar,
                              placeholder_text="Select a folder or paste path (Ctrl+V) ...",
                              height=28)
-        entry.grid(row=0, column=0, sticky="ew", padx=(10, 6), pady=7)
+        entry.grid(row=0, column=0, sticky="ew", padx=(12, 8), pady=7)
 
-        browseBtn = ctk.CTkButton(f, text="Browse", width=90, height=28,
+        browseBtn = ctk.CTkButton(f, text="Browse", width=100, height=30,
                                   command=self._browseDir)
-        browseBtn.grid(row=0, column=1, padx=(6, 10), pady=7)
+        browseBtn.grid(row=0, column=1, padx=(8, 12), pady=7)
 
     # -- row 1: options bar --------------------------------------------
 
     def _buildOptionsBar(self) -> None:
-        bar = ctk.CTkFrame(self, corner_radius=8, height=30)
+        bar = ctk.CTkFrame(self, corner_radius=8, height=36)
         bar.grid(row=1, column=0, sticky="ew", padx=14, pady=(4, 0))
         bar.grid_columnconfigure(4, weight=1)
         bar.grid_propagate(False)
@@ -682,43 +682,43 @@ class JinaFileApp(ctk.CTk):
         # mode label
         self._modeLabel = ctk.CTkLabel(bar, text=self._modeLabelText(),
                                        font=ctk.CTkFont(size=11, weight="bold"))
-        self._modeLabel.grid(row=0, column=0, padx=(10, 10), pady=5, sticky="w")
+        self._modeLabel.grid(row=0, column=0, padx=(12, 10), pady=6, sticky="w")
 
         # separator
         ctk.CTkLabel(bar, text="|", font=ctk.CTkFont(size=11),
-                     text_color="#555").grid(row=0, column=1, padx=0, pady=5)
+                     text_color="#555").grid(row=0, column=1, padx=0, pady=6)
 
         # prefix / suffix
-        self._prefixEntry = ctk.CTkEntry(bar, width=70, height=22,
+        self._prefixEntry = ctk.CTkEntry(bar, width=90, height=24,
                                          placeholder_text="pre_")
-        self._prefixEntry.grid(row=0, column=2, padx=(8, 2), pady=4, sticky="w")
+        self._prefixEntry.grid(row=0, column=2, padx=(10, 4), pady=6, sticky="w")
 
-        self._suffixEntry = ctk.CTkEntry(bar, width=70, height=22,
+        self._suffixEntry = ctk.CTkEntry(bar, width=90, height=24,
                                          placeholder_text="_suf")
-        self._suffixEntry.grid(row=0, column=3, padx=(2, 10), pady=4, sticky="w")
+        self._suffixEntry.grid(row=0, column=3, padx=(4, 12), pady=6, sticky="w")
 
         # recursive checkbox
         self._recursiveVar = ctk.BooleanVar(value=False)
         recCheck = ctk.CTkCheckBox(bar, text="Subfolders", height=22,
                                    variable=self._recursiveVar,
                                    font=ctk.CTkFont(size=10))
-        recCheck.grid(row=0, column=4, padx=(0, 10), pady=5, sticky="w")
+        recCheck.grid(row=0, column=4, padx=(0, 12), pady=6, sticky="w")
 
         # filter
         filterLabel = ctk.CTkLabel(bar, text="Filter:",
                                    font=ctk.CTkFont(size=10, weight="bold"))
-        filterLabel.grid(row=0, column=5, padx=(0, 2), pady=5, sticky="w")
+        filterLabel.grid(row=0, column=5, padx=(0, 4), pady=6, sticky="w")
 
-        self._filterEntry = ctk.CTkEntry(bar, width=120, height=22,
+        self._filterEntry = ctk.CTkEntry(bar, width=140, height=24,
                                          placeholder_text="type to filter")
-        self._filterEntry.grid(row=0, column=6, padx=(0, 4), pady=4, sticky="w")
+        self._filterEntry.grid(row=0, column=6, padx=(0, 6), pady=6, sticky="w")
         self._filterEntry.bind("<KeyRelease>", lambda e: self._applyFilter())
 
         # scan btn
-        scanBtn = ctk.CTkButton(bar, text="Scan", width=50, height=22,
+        scanBtn = ctk.CTkButton(bar, text="Scan", width=55, height=24,
                                 font=ctk.CTkFont(size=10),
                                 command=self._scan)
-        scanBtn.grid(row=0, column=7, padx=(4, 8), pady=4)
+        scanBtn.grid(row=0, column=7, padx=(6, 10), pady=6)
 
         # select all
         self._selectAllVar = ctk.BooleanVar(value=True)
@@ -726,31 +726,31 @@ class JinaFileApp(ctk.CTk):
                                             variable=self._selectAllVar,
                                             command=self._onSelectAll,
                                             font=ctk.CTkFont(size=10))
-        self._selectAllCb.grid(row=0, column=8, padx=(0, 6), pady=5)
+        self._selectAllCb.grid(row=0, column=8, padx=(0, 8), pady=6)
 
         self._selCountLabel = ctk.CTkLabel(bar, text="",
                                            font=ctk.CTkFont(size=10))
-        self._selCountLabel.grid(row=0, column=9, padx=(0, 10), pady=5, sticky="e")
+        self._selCountLabel.grid(row=0, column=9, padx=(0, 12), pady=6, sticky="e")
 
     # -- row 2: regex frame --------------------------------------------
 
     def _buildRegexFrame(self) -> None:
-        self._regexFrame = ctk.CTkFrame(self, corner_radius=8, height=28)
-        self._regexFrame.grid(row=2, column=0, sticky="ew", padx=14, pady=(2, 0))
+        self._regexFrame = ctk.CTkFrame(self, corner_radius=8, height=32)
+        self._regexFrame.grid(row=2, column=0, sticky="ew", padx=14, pady=(4, 0))
         self._regexFrame.grid_columnconfigure((1, 3), weight=1)
         self._regexFrame.grid_propagate(False)
 
         ctk.CTkLabel(self._regexFrame, text="Find:",
-                     font=ctk.CTkFont(size=10)).grid(row=0, column=0, padx=(10, 2), pady=3, sticky="w")
-        self._findEntry = ctk.CTkEntry(self._regexFrame, height=20,
+                     font=ctk.CTkFont(size=10)).grid(row=0, column=0, padx=(12, 4), pady=5, sticky="w")
+        self._findEntry = ctk.CTkEntry(self._regexFrame, height=22,
                                        placeholder_text=r"(\d+)_old")
-        self._findEntry.grid(row=0, column=1, padx=(0, 10), pady=3, sticky="ew")
+        self._findEntry.grid(row=0, column=1, padx=(0, 12), pady=5, sticky="ew")
 
         ctk.CTkLabel(self._regexFrame, text="Replace:",
-                     font=ctk.CTkFont(size=10)).grid(row=0, column=2, padx=(4, 2), pady=3, sticky="w")
-        self._replEntry = ctk.CTkEntry(self._regexFrame, height=20,
+                     font=ctk.CTkFont(size=10)).grid(row=0, column=2, padx=(6, 4), pady=5, sticky="w")
+        self._replEntry = ctk.CTkEntry(self._regexFrame, height=22,
                                        placeholder_text=r"new_\1")
-        self._replEntry.grid(row=0, column=3, padx=(0, 10), pady=3, sticky="ew")
+        self._replEntry.grid(row=0, column=3, padx=(0, 12), pady=5, sticky="ew")
 
         self._regexFrame.grid_remove()
 
@@ -790,36 +790,36 @@ class JinaFileApp(ctk.CTk):
     # -- row 3: bottom bar -------------------------------------------
 
     def _buildBottomFrame(self) -> None:
-        f = ctk.CTkFrame(self, corner_radius=8, height=44)
-        f.grid(row=4, column=0, sticky="ew", padx=14, pady=(4, 14))
+        f = ctk.CTkFrame(self, corner_radius=8, height=50)
+        f.grid(row=4, column=0, sticky="ew", padx=14, pady=(6, 14))
         f.grid_columnconfigure(0, weight=1)
         f.grid_propagate(False)
 
         self._progress = ctk.CTkProgressBar(f, mode="determinate", height=8)
         self._progress.set(0)
         self._progress.grid(row=0, column=0, columnspan=5, sticky="ew",
-                            padx=12, pady=(6, 2))
+                            padx=14, pady=(8, 4))
 
         row = ctk.CTkFrame(f, corner_radius=0, fg_color="transparent")
-        row.grid(row=1, column=0, columnspan=5, sticky="ew", padx=12, pady=(0, 6))
+        row.grid(row=1, column=0, columnspan=5, sticky="ew", padx=14, pady=(0, 8))
 
         self._statusVar = ctk.StringVar(value="Ready")
         ctk.CTkLabel(row, textvariable=self._statusVar, anchor="w",
                      font=ctk.CTkFont(size=11)).grid(row=0, column=0, sticky="w")
 
-        self._abortBtn = ctk.CTkButton(row, text="Abort", width=70, height=26,
+        self._abortBtn = ctk.CTkButton(row, text="Abort", width=80, height=28,
                                        fg_color="#993333", hover_color="#cc4444",
                                        state="disabled", command=self._abortOp)
-        self._abortBtn.grid(row=0, column=1, padx=(8, 4))
+        self._abortBtn.grid(row=0, column=1, padx=(12, 6))
 
-        self._undoBtn = ctk.CTkButton(row, text="Undo", width=70, height=26,
+        self._undoBtn = ctk.CTkButton(row, text="Undo", width=80, height=28,
                                       state="disabled", command=self._undo)
-        self._undoBtn.grid(row=0, column=2, padx=(4, 4))
+        self._undoBtn.grid(row=0, column=2, padx=(6, 6))
 
-        self._actionBtn = ctk.CTkButton(row, text="Execute", width=130, height=28,
+        self._actionBtn = ctk.CTkButton(row, text="Execute", width=140, height=30,
                                         font=ctk.CTkFont(size=12, weight="bold"),
                                         command=self._runAction)
-        self._actionBtn.grid(row=0, column=3, padx=(4, 0))
+        self._actionBtn.grid(row=0, column=3, padx=(6, 0))
 
     # ================================================================
     # Menu callbacks
@@ -1011,14 +1011,14 @@ class JinaFileApp(ctk.CTk):
             cb = ctk.CTkCheckBox(row, text="", width=22, height=18,
                                  variable=cbVar,
                                  command=lambda k=srcKey, v=cbVar: self._onCheck(k, v))
-            cb.grid(row=0, column=0, padx=(4, 2), pady=2)
+            cb.grid(row=0, column=0, padx=(6, 4), pady=3)
 
             # type
             tpText = indicatorText(srcPath)
             tpColor = fCol if srcPath.is_dir() else "gray"
             ctk.CTkLabel(row, text=tpText, anchor="w",
                          font=ctk.CTkFont(size=10),
-                         text_color=tpColor).grid(row=0, column=1, padx=(2, 4), pady=2, sticky="w")
+                         text_color=tpColor).grid(row=0, column=1, padx=(4, 6), pady=3, sticky="w")
 
             # warnings
             warnings = []
@@ -1036,23 +1036,23 @@ class JinaFileApp(ctk.CTk):
             if warnText:
                 ctk.CTkLabel(row, text="\u26a0", anchor="w",
                              font=ctk.CTkFont(size=10),
-                             text_color=warnColor).grid(row=0, column=2, padx=(2, 0), pady=2, sticky="w")
+                             text_color=warnColor).grid(row=0, column=2, padx=(4, 0), pady=3, sticky="w")
                 ctk.CTkLabel(row, text=warnText, anchor="w",
                              font=ctk.CTkFont(size=8),
-                             text_color=warnColor).grid(row=0, column=2, padx=(14, 4), pady=2, sticky="w")
+                             text_color=warnColor).grid(row=0, column=2, padx=(16, 6), pady=3, sticky="w")
                 origCol = 2
 
             # original name
             ctk.CTkLabel(row, text=srcPath.name, anchor="w",
                          font=ctk.CTkFont(size=12)).grid(
-                row=0, column=origCol, padx=4, pady=2, sticky="w")
+                row=0, column=origCol, padx=6, pady=3, sticky="w")
             propCol = origCol + 1
 
             # proposed name (stem + extension lock)
             pStem = Path(finalName).stem
             pExt = Path(finalName).suffix
             pf = ctk.CTkFrame(row, corner_radius=0, fg_color=bg)
-            pf.grid(row=0, column=propCol, padx=4, pady=2, sticky="w")
+            pf.grid(row=0, column=propCol, padx=6, pady=3, sticky="w")
 
             sc = changedColor if changed else None
             sf = ctk.CTkFont(size=12, weight="bold") if changed else ctk.CTkFont(size=12)
