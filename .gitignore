@@ -4,3 +4,6 @@ installer.iss
 __pycache__/
 build/
 *.spec
+
+jf_icon.ico
+installer.iss

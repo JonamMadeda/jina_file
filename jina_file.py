@@ -594,6 +594,7 @@ class JinaFileApp(ctk.CTk):
         self.title("jina_file")
         self.minsize(860, 640)
         self.after(50, lambda: self.state("zoomed"))
+        self._setAppIcon()
 
         # state
         self._targetDir: Path | None = None
@@ -623,6 +624,36 @@ class JinaFileApp(ctk.CTk):
 
         self._buildUi()
         self.bind("<Control-v>", lambda e: self._pasteDir())
+
+    # -- app icon --------------------------------------------------------
+
+    def _setAppIcon(self) -> None:
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            size = 64
+            img = Image.new("RGBA", (size, size), (26, 26, 46, 255))
+            draw = ImageDraw.Draw(img)
+            font = None
+            for name in ["segoeuib.ttf", "segoeui.ttf", "arialbd.ttf", "arial.ttf", "calibrib.ttf"]:
+                try:
+                    font = ImageFont.truetype(name, 28)
+                    break
+                except Exception:
+                    continue
+            if font is None:
+                font = ImageFont.load_default()
+            text = "JF"
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+            x = (size - tw) // 2 - bbox[0]
+            y = (size - th) // 2 - bbox[1] - 1
+            draw.text((x, y), text, fill=(200, 200, 210, 255), font=font)
+            icoPath = Path(os.environ.get("TEMP", ".")) / ".jina_file_icon.ico"
+            img.save(icoPath, format="ICO", sizes=[(size, size)])
+            self.iconbitmap(default=str(icoPath))
+        except Exception:
+            pass
 
     # ================================================================
     # UI construction
