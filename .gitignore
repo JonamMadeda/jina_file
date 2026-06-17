@@ -1,9 +1,6 @@
 jina_file.exe
 jina_file_setup.exe
-installer.iss
 __pycache__/
 build/
 *.spec
-
 jf_icon.ico
-installer.iss
